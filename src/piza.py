@@ -2,20 +2,26 @@ import random
 
 from tqdm import trange
 
-from utils import XYZ, dist_squared
+from utils import dist_squared
 
 
 class Universe:
     def __init__(self, particles):
         self.particles = particles
         self.min_coords = [
-            min(self.particles, key=lambda p: p[q])[q] for q in XYZ
+            min([p[0] for p in self.particles]),
+            min([p[1] for p in self.particles]),
+            min([p[2] for p in self.particles])
         ]
         self.max_coords = [
-            max(self.particles, key=lambda p: p[q])[q] for q in XYZ
+            max([p[0] for p in self.particles]),
+            max([p[1] for p in self.particles]),
+            max([p[2] for p in self.particles])
         ]
         self.sizes = [
-            self.max_coords[q] - self.min_coords[q] for q in XYZ
+            self.max_coords[0] - self.min_coords[0],
+            self.max_coords[1] - self.min_coords[1],
+            self.max_coords[2] - self.min_coords[2]
         ]
 
     def slice(self, axis, start, end):
@@ -35,13 +41,19 @@ class UniverseTrajectory:
 
         # Boundaries
         self.min_coords = [
-            min(self.particles, key=lambda p: p[q])[q] for q in XYZ
+            min([p[0] for p in self.particles]),
+            min([p[1] for p in self.particles]),
+            min([p[2] for p in self.particles])
         ]
         self.max_coords = [
-            max(self.particles, key=lambda p: p[q])[q] for q in XYZ
+            max([p[0] for p in self.particles]),
+            max([p[1] for p in self.particles]),
+            max([p[2] for p in self.particles])
         ]
         self.sizes = [
-            self.max_coords[q] - self.min_coords[q] for q in XYZ
+            self.max_coords[0] - self.min_coords[0],
+            self.max_coords[1] - self.min_coords[1],
+            self.max_coords[2] - self.min_coords[2],
         ]
 
         # Not an action, actually, but action is proportional to it. This is
@@ -110,9 +122,10 @@ def read_universe(path):
 
 def random_init_universe(universe):
     random_positions = [
-        tuple(
-            random.uniform(universe.min_coords[q], universe.max_coords[q])
-            for q in XYZ
+        (
+            random.uniform(universe.min_coords[0], universe.max_coords[0]),
+            random.uniform(universe.min_coords[1], universe.max_coords[1]),
+            random.uniform(universe.min_coords[2], universe.max_coords[2])
         )
         for _ in range(len(universe.particles))
     ]
