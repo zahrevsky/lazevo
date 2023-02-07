@@ -1,0 +1,27 @@
+# Input file with comoving coordinates (x, y, z)
+coordinates_filepath: "input/coord_LCDM.txt"
+  
+# Format of input file: ascii or binary
+coordinates_filetype: "ascii"
+
+# Input file with random coordinates. If null, it is generated programmatically
+rnd_filename: null
+
+# Prefix of the output files
+output_path: "output/"
+output_coords_prefix: "coord_LCDM_"
+coords_image_filename: "slice"
+displacements_image_filename_prefix: "displacements_"
+psi_graph_filename_prefix: "psi"
+
+# Fraction of objects after random sample dilution
+dillution_factor: 1
+
+# Mode: periodic, no_periodic, or linear_along_x
+mode: "periodic"
+
+# Number of iterations at randomization
+n_iters: 10
+
+# Number of random realizations
+n_realizations: 8
