@@ -1,27 +1,13 @@
-# Input file with comoving coordinates (x, y, z)
-coordinates_filepath: "input/coord_LCDM.txt"
-  
-# Format of input file: ascii or binary
-coordinates_filetype: "ascii"
+paths:
+  input:
+    particles_positions: "input/coord_LCDM.txt" # File with comoving coordinates of the particles (x, y, z)
+    random_positions: null # File with random coordinates. If null, it is generated programmatically
+  output:
+    universe_fig: "output/slice.png" # Where to store figure with given particles positions
+    trajectory_txt_prefix: "output/coord_LCDM_" # Where to store generated trajectories of the universe in text format
+    trajectory_fig_prefix: "output/displacements_" # Where to store generated trajectories of the universe as figures
 
-# Input file with random coordinates. If null, it is generated programmatically
-rnd_filename: null
-
-# Prefix of the output files
-output_path: "output/"
-output_coords_prefix: "coord_LCDM_"
-coords_image_filename: "slice"
-displacements_image_filename_prefix: "displacements_"
-psi_graph_filename_prefix: "psi"
-
-# Fraction of objects after random sample dilution
-dillution_factor: 1
-
-# Mode: periodic, no_periodic, or linear_along_x
-mode: "periodic"
-
-# Number of iterations at randomization
-n_iters: 10
-
-# Number of random realizations
-n_realizations: 8
+dillution_factor: 1 # Fraction of particles after dilution
+mode: "periodic" # Mode: periodic, no_periodic, or linear_along_x
+n_realizations: 8 # Number of random realizations
+n_iters: 10 # Number of PIZA iterations to run for each realization

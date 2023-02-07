@@ -100,3 +100,21 @@ def piza(realizations, n_iters=10):
     for curr_iter in trange(n_iters): #TODO: Implement more quit strategies
         for realization in realizations:
             realization.do_piza_step()
+
+
+def read_universe(path):
+    with open(path) as f:
+        particle_positions = [[float(q) for q in line.rstrip().split()] for line in f]
+    return Universe(particle_positions)
+
+
+def random_init_universe(universe):
+    random_positions = [
+        tuple(
+            random.uniform(universe.min_coords[q], universe.max_coords[q])
+            for q in XYZ
+        )
+        for _ in range(len(universe.particles))
+    ]
+
+    return random_positions
