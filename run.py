@@ -1,6 +1,6 @@
-from piza import UniverseTrajectory, piza, read_universe, random_init_universe
-from plotter import plot_universe_to_file, plot_universe_trajectory_to_file
-from utils import parse_params
+from lazevo.piza import UniverseTrajectory, piza, read_universe, random_init_universe
+from lazevo.plotter import plot_universe_to_file, plot_universe_trajectory_to_file
+from lazevo.utils import parse_params
 
 
 if __name__ == '__main__':

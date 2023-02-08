@@ -12,3 +12,11 @@ Now, to run Lazevo, use this command:
 pipenv run python src/main.py
 ```
 This will run Lazevo on data from `input/` directory, using predefined config in `input/params.yaml`.
+
+
+## Documentation
+[PIZA algorithm implementation & data structures](docs/piza.md)
+
+[Plotting routines](docs/plotter.md)
+
+[Miscelaneous utilities](docs/utils.md)

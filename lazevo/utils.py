@@ -1,3 +1,8 @@
+"""
+Includes miscelaneous helpers: parse input parameters, calculated squared distance, etc.
+"""
+
+
 import argparse
 import random
 from typing import Mapping, Any
@@ -12,7 +17,7 @@ Helpful type alias
 
 
 def parse_params() -> dict[str, Any]:
-    """Reads parameters from command line and configuration file
+    """Reads parameters from command line and configuration file.
 
     Returns:
         A dict with config parameters, that might be nested. For example:
@@ -51,7 +56,7 @@ def parse_params() -> dict[str, Any]:
 
 
 def dist_squared(p1: Point, p2: Point) -> float:
-    """Calculates squre of the distance between two points
+    """Calculates squre of the distance between two points.
 
     Order of points is not important:
 
