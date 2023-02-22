@@ -10,4 +10,4 @@ paths:
 dillution_factor: 1 # Fraction of particles after dilution
 mode: "periodic" # Mode: periodic, no_periodic, or linear_along_x
 n_realizations: 8 # Number of random realizations
-n_iters: 10 # Number of PIZA iterations to run for each realization
+n_iters: 100 # Number of PIZA iterations to run for each realization

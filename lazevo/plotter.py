@@ -6,6 +6,7 @@ helps to distribute responsibility, as plotting and minimizing action are two di
 """
 
 import matplotlib.pyplot as plt
+import numpy as np
 
 
 def plot_projection_to_file(filename, particles, displacements=None):
@@ -38,24 +39,6 @@ def plot_projection_to_file(filename, particles, displacements=None):
     plt.savefig(filename)
 
 
-def project(item_3d, axis=0):
-    """Projects a 3D point onto a 2D plane, perpendicular to the given axis.
-    
-    Args:
-        item_3d (tuple): a 3D tuple to be projected.
-        axis (int, optional): the axis to drop. The default is 0.
-    
-    Returns:
-        tuple: a 2D tuple representing the projection of the 3D item.
-    """
-    if axis == 0:
-        return (item_3d[1], item_3d[2])
-    elif axis == 1:
-        return (item_3d[0], item_3d[2])
-    elif axis == 2:
-        return (item_3d[0], item_3d[1])
-
-
 def plot_universe_trajectory_to_file(filename, universe_trajectory, axis=0, start=0.1, end=0.1625):
     """Plots the 2D projection of a slice of a universe trajectory, and saves the plot to a file.
 
@@ -70,8 +53,9 @@ def plot_universe_trajectory_to_file(filename, universe_trajectory, axis=0, star
     """
     universe_trajectory_slice = universe_trajectory.slice(axis, start, end)
 
-    particles_proj = [project(p) for p in universe_trajectory_slice.particles]
-    displacements_proj = [project(d) for d in universe_trajectory_slice.displacements]
+    # obj is a number of column to remove, which is the axis along which to project
+    particles_proj = np.delete(universe_trajectory_slice.particles, obj=axis, axis=1)
+    displacements_proj = np.delete(universe_trajectory_slice.displacements, obj=axis, axis=1)
     
     plot_projection_to_file(
         filename,
@@ -91,10 +75,9 @@ def plot_universe_to_file(filename, universe, axis=0, start=0.1, end=0.1625):
         start (float, optional): the start of the slice. The default is 0.1.
         end (float, optional): the end of the slice. The default is 0.1625.
     """
-    particles = universe.slice(axis, start, end).particles
-    #TODO: rewrite project() as Universe method: 
+    #TODO: rewrite projection using np.delete to a Universe method, that returns 2D slice
     # universe.slice(axis, start, end).project('x').particles
-    particles_proj = [project(p) for p in particles]
+    particles_proj = np.delete(universe.slice(axis, start, end).particles, obj=axis, axis=1)
     
     plot_projection_to_file(
         filename,

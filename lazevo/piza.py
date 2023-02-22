@@ -1,13 +1,10 @@
 """
 Provides PIZA algorithm implementation, as well as classes to represent data structures.
 """
-
-
 import random
 
-from tqdm import trange
-
-from lazevo.utils import dist_squared
+import numpy as np
+from tqdm import trange, tqdm
 
 
 class Universe:
@@ -17,22 +14,10 @@ class Universe:
     It also has a method slice, to extract a sub-universe from the current universe.
     """
     def __init__(self, particles):
-        self.particles = particles
-        self.min_coords = [
-            min([p[0] for p in self.particles]),
-            min([p[1] for p in self.particles]),
-            min([p[2] for p in self.particles])
-        ]
-        self.max_coords = [
-            max([p[0] for p in self.particles]),
-            max([p[1] for p in self.particles]),
-            max([p[2] for p in self.particles])
-        ]
-        self.sizes = [
-            self.max_coords[0] - self.min_coords[0],
-            self.max_coords[1] - self.min_coords[1],
-            self.max_coords[2] - self.min_coords[2]
-        ]
+        self.particles = np.asarray(particles)
+        self.min_coords = np.min(self.particles, axis=0)
+        self.max_coords = np.max(self.particles, axis=0)
+        self.sizes = self.max_coords - self.min_coords
 
     def slice(self, axis: int, start: float, end: float):
         """Slices a universe along the given axis.
@@ -48,10 +33,11 @@ class Universe:
         Returns:
             A new Universe instance, representing the sub-universe.
         """
-        return Universe([
-            p for p in self.particles 
-            if start * self.sizes[axis] <= p[axis] - self.min_coords[axis] <= end * self.sizes[axis]
-        ])
+        mask = np.logical_and(
+            start * self.sizes[axis] <= self.particles[:, axis] - self.min_coords[axis],
+            end * self.sizes[axis] >= self.particles[:, axis] - self.min_coords[axis]
+        )
+        return Universe(self.particles[mask])
 
 
 class UniverseTrajectory:
@@ -64,119 +50,149 @@ class UniverseTrajectory:
     PIZA algorithm step.
 
     Attributes:
-        pairs (Dict[Tuple[float, float, float], Tuple[float, float, float]]): A dictionary where keys are initial positions of particles and values are their final positions.
-        min_coords (List[float, float, float]): Minimum values of x, y and z coordinates.
-        max_coords (List[float, float, float]): Maximum values of x, y and z coordinates.
-        sizes (List[float, float, float]): Sizes of the universe along each axis.
-        action (int): The sum of each point's displacements squared, a. k. a. ∑ψᵢ².
+        pairs: A dictionary where keys are initial positions of particles and values are their final positions.
+        min_coords: Minimum values of x, y and z coordinates.
+        max_coords: Maximum values of x, y and z coordinates.
+        sizes: Sizes of the universe along each axis.
+        action: The sum of each point's displacements squared, a. k. a. ∑ψᵢ².
 
     Args:
         particles: List of particles in the trajectory.
         init_positions: List of initial positions of the particles. 
     """
     def __init__(self, particles, init_positions):
-        #TODO: either swap keys and values in pairs, or even consider avoiding ambiguity, by storing them separately
-        self.pairs = {
-            init_position: particle
-            for init_position, particle in zip(init_positions, particles)
-        }
+        self.particles = np.asarray(particles)
+        self.init_positions = np.asarray(init_positions)
+        self.pairs = np.stack((particles, init_positions), axis=1)
 
         # Boundaries
-        self.min_coords = [
-            min([p[0] for p in self.particles]),
-            min([p[1] for p in self.particles]),
-            min([p[2] for p in self.particles])
-        ]
-        self.max_coords = [
-            max([p[0] for p in self.particles]),
-            max([p[1] for p in self.particles]),
-            max([p[2] for p in self.particles])
-        ]
-        self.sizes = [
-            self.max_coords[0] - self.min_coords[0],
-            self.max_coords[1] - self.min_coords[1],
-            self.max_coords[2] - self.min_coords[2],
-        ]
+        self.min_coords = np.min(particles, axis=0)
+        self.max_coords = np.max(particles, axis=0)
+        self.sizes = self.max_coords - self.min_coords
 
         # Not an action, actually, but action is proportional to it. This is
         # a sum of each point's displacements squared, a. k. a. ∑ψᵢ²
         # By minimizing it, you minimize an action of a system.
-        self.action = sum([
-            dist_squared(origin, end) for origin, end in self.pairs.items()
-        ])
+        self.action = np.sum(np.linalg.norm(self.init_positions - self.particles, axis=1))
 
     @property
-    def particles(self):
+    def displacements(self) -> np.ndarray:
         """
         Returns:
-            List[Tuple[float, float, float]]: The final positions of particles.
+            Displacement of each particle from its initial position to final position.
         """
-        return self.pairs.values()
+        return self.particles - self.init_positions
 
-    @property
-    def init_positions(self):
-        """
-        Returns:
-            List[Tuple[float, float, float]]: The initial positions of particles.
-        """
-        return self.pairs.keys()
-
-    @property
-    def displacements(self):
-        """
-        Returns:
-            List[Tuple[float, float, float]]: Displacement of each particle from its initial position to final position.
-        """
-        return [
-            (
-                position[0] - init_position[0],
-                position[1] - init_position[1],
-                position[2] - init_position[2]
-            )
-            for init_position, position in self.pairs.items()
-        ]
-
-    def slice(self, axis, start, end):
+    def slice(self, axis: int, start: float, end: float):
         """See Universe.slice."""
-        slice_raw = {
-            init_position: particle
-            for init_position, particle in self.pairs.items()
-            if start * self.sizes[axis] <= particle[axis] - self.min_coords[axis] <= end * self.sizes[axis]   
-        }
-        return UniverseTrajectory(slice_raw.values(), slice_raw.keys())
+        mask = np.logical_and(
+            start * self.sizes[axis] <= self.particles[:, axis] - self.min_coords[axis],
+            end * self.sizes[axis] >= self.particles[:, axis] - self.min_coords[axis]
+        )
+        return UniverseTrajectory(self.particles[mask], self.init_positions[mask])
 
     def do_piza_step(self):
         """Picks randomly two particles and swaps their initial positions, if it decreases total action."""
-        trajectory1, trajectory2 = random.sample(list(self.pairs.items()), k=2)
-        origin1, end1 = trajectory1
-        origin2, end2 = trajectory2
+        np_rnd = np.random.default_rng()
 
-        action_delta = dist_squared(origin1, end2) \
-            + dist_squared(origin2, end1) \
-            - dist_squared(origin1, end1) \
-            - dist_squared(origin2, end2)
+        idx1, idx2 = random.sample(range(len(self.pairs)), 2)
+        trajectory1, trajectory2 = self.pairs[idx1], self.pairs[idx2]
+        end1, origin1 = trajectory1
+        end2, origin2 = trajectory2
+
+        action_delta = np.linalg.norm(origin1 - end2) \
+            + np.linalg.norm(origin2 - end1) \
+            - np.linalg.norm(origin1 - end1) \
+            - np.linalg.norm(origin2 - end2)
 
         if action_delta < 0:
-            self.pairs[origin1], self.pairs[origin2] = end2, end1
+            self.pairs[[idx1, idx2]] = self.pairs[[idx2, idx1]]
+            self.particles[[idx1, idx2]] = self.particles[[idx2, idx1]]
+            self.init_positions[[idx1, idx2]] = self.init_positions[[idx2, idx1]]
             self.action = self.action + action_delta
 
 
-def piza(realizations: list[UniverseTrajectory], n_iters=10):
-    """Minimizing action by Path Interchange Zeldovich Approximation (PIZA).
-
-    Runs PIZA for several UniverseTrajectory objects
-
-    Args:
-        realizations: Each realization is a UniverseTrajectory with a unique initial positions
-        n_iters: Number of iterations to perform in the minimization process
+class AveragedUniverseTrajectory:
     """
+    Multiple reconstructions of UniverseTrajectory. Initial positions 
+    of each trajectory is random at first, and the whole job of PIZA 
+    is to make it satisfy least action principle.
+    """
+    def __init__(self, universe: Universe, n_realizaitons: int):
+        self.universe = universe
 
-    for curr_iter in trange(n_iters): #TODO: Implement more quit strategies
-        for realization in realizations:
-            realization.do_piza_step()
+        #TODO: Read random positions from file, if provided
+        self.realizations = [
+            UniverseTrajectory(universe.particles, np.asarray(random_init_universe(universe)))
+            for _ in range(n_realizaitons)
+        ]
 
 
-def read_universe(path):
+    def piza(self, n_iters: int = 10):
+        """Minimizing action by Path Interchange Zeldovich Approximation (PIZA).
+
+        Runs PIZA for several UniverseTrajectory objects
+
+        Args:
+            realizations: Each realization is a UniverseTrajectory with a unique initial positions
+            n_iters: Number of iterations to perform in the minimization process
+        """
+
+        for curr_iter in trange(n_iters): #TODO: Implement more quit strategies
+            for realization in self.realizations:
+                realization.do_piza_step()
+
+    def probe(self, point) -> np.ndarray:
+        """
+        Averaged displacement at arbitrary point is given by:
+        probe(q) = 1 / V(q) * Σ( a(q, p) * p.displacement )
+        Where:
+            q - arbitrary point in the Universe
+            p - one of particles, Σ is over all particles in all the realizations
+            V(p) = Σ a(point, p)
+            a(p, q) = e^( - d(p, q)^2 / (2σ^2) )
+            d(p, q) - distacne between points p and q
+            σ - kernel smoothing parameter
+        """
+        point = np.asarray(point)
+
+        #TODO: check if point is in universe boundaries
+
+        all_init_positions = np.concatenate([r.init_positions for r in self.realizations], axis=0)
+        all_particles = np.concatenate([r.particles for r in self.realizations], axis=0)
+        all_displacements = all_particles - all_init_positions
+
+        # 1.5 Mpc/h, assuming 80 Mpc/h = 250 000 in internal units (this is the size of the universe)
+        sigma = 4687.5
+
+        a = np.exp(-1 * np.linalg.norm(point - all_particles, axis=1) / (2 * sigma ** 2))
+        V = np.sum(a)
+        return a[:, np.newaxis] * all_displacements / V
+
+    def probe_grid(self, n_steps):
+        # Create the 3D grid
+        min_coords = self.universe.min_coords
+        max_coords = self.universe.max_coords
+
+        x = np.linspace(min_coords[0], max_coords[0], n_steps)
+        y = np.linspace(min_coords[1], max_coords[1], n_steps)
+        z = np.linspace(min_coords[2], max_coords[2], n_steps)
+        xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
+        grid = np.vstack([xx.flatten(), yy.flatten(), zz.flatten()]).T
+
+        def probe_and_upd_progressbar(point, bar):
+            bar.update(1)
+            return self.probe(point)
+
+        with tqdm(total=len(grid)) as bar:
+            grid_probes = np.apply_along_axis(
+                lambda p: probe_and_upd_progressbar(p, bar), 
+                axis=1, arr=grid
+            )
+
+        return grid, grid_probes
+
+def read_universe(path: str) -> Universe:
     """Read the universe from the given file path.
     
     Args:
@@ -190,7 +206,7 @@ def read_universe(path):
     return Universe(particle_positions)
 
 
-def random_init_universe(universe):
+def random_init_universe(universe: Universe) -> np.ndarray:
     """Generates random initial positions for each particle from the given Universe object.
 
     Returns:
@@ -202,11 +218,11 @@ def random_init_universe(universe):
 
     """
     random_positions = [
-        (
+        [
             random.uniform(universe.min_coords[0], universe.max_coords[0]),
             random.uniform(universe.min_coords[1], universe.max_coords[1]),
             random.uniform(universe.min_coords[2], universe.max_coords[2])
-        )
+        ]
         for _ in range(len(universe.particles))
     ]
 

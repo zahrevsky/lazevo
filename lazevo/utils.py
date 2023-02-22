@@ -1,19 +1,10 @@
 """
 Includes miscelaneous helpers: parse input parameters, calculated squared distance, etc.
 """
-
-
 import argparse
-import random
-from typing import Mapping, Any
+from typing import Any
 
 import yaml
-
-
-Point = tuple[float, float, float]
-"""
-Helpful type alias
-"""
 
 
 def parse_params() -> dict[str, Any]:
@@ -53,22 +44,3 @@ def parse_params() -> dict[str, Any]:
         params = yaml.safe_load(f)
 
     return params
-
-
-def dist_squared(p1: Point, p2: Point) -> float:
-    """Calculates squre of the distance between two points.
-
-    Order of points is not important:
-
-        dist_squared(p1, p2) == dist_squared(p2, p1)
-
-    Args:
-        p1: Tuple of floats (x₁, y₁, z₁)
-        p2: Tuple of floats (x₂, y₂, z₂)
-
-    Returns:
-        (x₂—x₁)² + (y₂—y₁)² + (z₂—z₁)²
-    """
-    return (p2[0] - p1[0]) ** 2 \
-         + (p2[1] - p1[1]) ** 2 \
-         + (p2[2] - p1[2]) ** 2
