@@ -2,7 +2,7 @@ from itertools import product
 
 from tqdm.contrib.itertools import product as tproduct
 
-from lazevo.piza import UniverseTrajectory, AveragedUniverseTrajectory, read_universe
+from lazevo.piza import Lazevo, read_universe
 from lazevo.plotter import plot_universe_to_file, plot_universe_trajectory_to_file
 from lazevo.utils import parse_params
 
@@ -19,15 +19,15 @@ if __name__ == '__main__':
     plot_universe_to_file(params['paths']['output']['universe_fig'], universe)
 
     print("Running PIZA...")
-    averaged_universe_trajectory = AveragedUniverseTrajectory(universe, params['n_realizations'])
-    averaged_universe_trajectory.piza(params['n_iters'])
+    lazevo = Lazevo(universe, params['n_realizations'])
+    lazevo.piza(params['n_iters'])
 
     #TODO: implement aut.probe_grid() that utilizes numpy under the hood
     print("Probing 5^3 points...")
-    points, vectors = averaged_universe_trajectory.probe_grid(5)
+    points, vectors = lazevo.avg_displacement_on_grid(5)
 
     # Plot universe trajectories
-    for idx, realization in enumerate(averaged_universe_trajectory.realizations):
+    for idx, realization in enumerate(lazevo.realizations):
         plot_universe_trajectory_to_file(
             params['paths']['output']['trajectory_fig_prefix'] + str(idx), 
             realization

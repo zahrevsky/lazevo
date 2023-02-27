@@ -112,7 +112,7 @@ class UniverseTrajectory:
             self.action = self.action + action_delta
 
 
-class AveragedUniverseTrajectory:
+class Lazevo:
     """
     Multiple reconstructions of UniverseTrajectory. Initial positions 
     of each trajectory is random at first, and the whole job of PIZA 
@@ -142,17 +142,17 @@ class AveragedUniverseTrajectory:
             for realization in self.realizations:
                 realization.do_piza_step()
 
-    def probe(self, point) -> np.ndarray:
+    def avg_displacement_at(self, point) -> np.ndarray:
         """
         Averaged displacement at arbitrary point is given by:
-        probe(q) = 1 / V(q) * Σ( a(q, p) * p.displacement )
+        1 / V(q) * Σ( a(q, p) * p.displacement )
         Where:
             q - arbitrary point in the Universe
-            p - one of particles, Σ is over all particles in all the realizations
+            p - one of particles (Σ is over all particles in all the realizations)
             V(p) = Σ a(point, p)
-            a(p, q) = e^( - d(p, q)^2 / (2σ^2) )
+            a(p, q) = e^( - d(p, q)^2 / (2 * sigma^2) )
             d(p, q) - distacne between points p and q
-            σ - kernel smoothing parameter
+            sigma - kernel smoothing parameter
         """
         point = np.asarray(point)
 
@@ -162,14 +162,16 @@ class AveragedUniverseTrajectory:
         all_particles = np.concatenate([r.particles for r in self.realizations], axis=0)
         all_displacements = all_particles - all_init_positions
 
-        # 1.5 Mpc/h, assuming 80 Mpc/h = 250 000 in internal units (this is the size of the universe)
+        # 1.5 Mpc/h, assuming 80 Mpc/h = 250 000 in internal units 
+        # (this is the size of the universe, with which testing was done)
+        # Feel free to change
         sigma = 4687.5
 
         a = np.exp(-1 * np.linalg.norm(point - all_particles, axis=1) / (2 * sigma ** 2))
         V = np.sum(a)
         return a[:, np.newaxis] * all_displacements / V
 
-    def probe_grid(self, n_steps):
+    def avg_displacement_on_grid(self, n_steps):
         # Create the 3D grid
         min_coords = self.universe.min_coords
         max_coords = self.universe.max_coords
@@ -182,7 +184,7 @@ class AveragedUniverseTrajectory:
 
         def probe_and_upd_progressbar(point, bar):
             bar.update(1)
-            return self.probe(point)
+            return self.avg_displacement_at(point)
 
         with tqdm(total=len(grid)) as bar:
             grid_probes = np.apply_along_axis(
