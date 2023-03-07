@@ -8,6 +8,7 @@ pyyaml = "*"
 tqdm = "*"
 matplotlib = "*"
 numpy = "*"
+humanize = "*"
 
 [dev-packages]
 

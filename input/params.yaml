@@ -1,7 +1,7 @@
 paths:
   input:
-    particles_positions: "input/coord_LCDM.txt" # File with comoving coordinates of the particles (x, y, z)
-    random_positions: null # File with random coordinates. If null, it is generated programmatically
+    particles_positions: "input/efield.txt" # File with comoving coordinates of the particles (x, y, z)
+    reconstructions: ['input/efield_reconstruction.txt']
   output:
     universe_fig: "output/slice.png" # Where to store figure with given particles positions
     trajectory_txt_prefix: "output/coord_LCDM_" # Where to store generated trajectories of the universe in text format
@@ -9,5 +9,10 @@ paths:
 
 dillution_factor: 1 # Fraction of particles after dilution
 mode: "periodic" # Mode: periodic, no_periodic, or linear_along_x
-n_realizations: 8 # Number of random realizations
-n_iters: 100 # Number of PIZA iterations to run for each realization
+n_reconstructions: 8 # Number of random realizations
+n_iters: 0 # Number of PIZA iterations to run for each realization
+sigma: 0.1
+visualization:
+  start: 0.25
+  end: 0.35
+  grid_step: 0.1

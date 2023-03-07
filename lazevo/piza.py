@@ -1,10 +1,11 @@
 """
 Provides PIZA algorithm implementation, as well as classes to represent data structures.
 """
-import random
+from typing import Optional, Union
 
 import numpy as np
 from tqdm import trange, tqdm
+import humanize
 
 
 class Universe:
@@ -38,9 +39,13 @@ class Universe:
             end * self.sizes[axis] >= self.particles[:, axis] - self.min_coords[axis]
         )
         return Universe(self.particles[mask])
+    
+    @property
+    def mean_distance(self):
+        return np.mean(np.sqrt(((self.particles[:, None, :] - self.particles) ** 2).sum(axis=2)))
 
 
-class UniverseTrajectory:
+class Reconstruction:
     """Does PIZA and represents the trajectory of all the particles in the universe.
     
     It holds information about the initial and actual positions of the particles 
@@ -73,7 +78,11 @@ class UniverseTrajectory:
         # Not an action, actually, but action is proportional to it. This is
         # a sum of each point's displacements squared, a. k. a. ∑ψᵢ²
         # By minimizing it, you minimize an action of a system.
-        self.action = np.sum(np.linalg.norm(self.init_positions - self.particles, axis=1))
+        self.action = np.sum(np.linalg.norm(self.init_positions - self.particles, axis=1)**2)
+
+        # Used to prioritize displacements with high deviation from mean
+        # when doing PIZA
+        self.mean_squared_displacement = np.mean(np.linalg.norm(self.displacements, axis=1) ** 2)
 
     @property
     def displacements(self) -> np.ndarray:
@@ -89,89 +98,265 @@ class UniverseTrajectory:
             start * self.sizes[axis] <= self.particles[:, axis] - self.min_coords[axis],
             end * self.sizes[axis] >= self.particles[:, axis] - self.min_coords[axis]
         )
-        return UniverseTrajectory(self.particles[mask], self.init_positions[mask])
+        return Reconstruction(self.particles[mask], self.init_positions[mask])
 
-    def do_piza_step(self):
-        """Picks randomly two particles and swaps their initial positions, if it decreases total action."""
+    def do_piza_step(self) -> bool:
+        """Performs a step of PIZA algorithm.
+        
+        Picks randomly two particles and swaps their initial positions, if it 
+        decreases total action.
+
+        Returns:
+            bool: True, if swapping was done, False otherwise
+        
+        """
         np_rnd = np.random.default_rng()
-
-        idx1, idx2 = random.sample(range(len(self.pairs)), 2)
+        # weights = np.abs(
+        #     self.mean_squared_displacement \
+        #     - np.linalg.norm(self.displacements, axis=1)
+        # )
+        # norm_weights = weights / np.sum(weights)
+        idx1, idx2 = np_rnd.choice(len(self.pairs), size=2, replace=False)
         trajectory1, trajectory2 = self.pairs[idx1], self.pairs[idx2]
         end1, origin1 = trajectory1
         end2, origin2 = trajectory2
 
-        action_delta = np.linalg.norm(origin1 - end2) \
-            + np.linalg.norm(origin2 - end1) \
-            - np.linalg.norm(origin1 - end1) \
-            - np.linalg.norm(origin2 - end2)
+        action_delta = np.linalg.norm(origin1 - end2) ** 2 \
+            + np.linalg.norm(origin2 - end1) ** 2 \
+            - np.linalg.norm(origin1 - end1) ** 2 \
+            - np.linalg.norm(origin2 - end2) ** 2
 
         if action_delta < 0:
-            self.pairs[[idx1, idx2]] = self.pairs[[idx2, idx1]]
-            self.particles[[idx1, idx2]] = self.particles[[idx2, idx1]]
+            self.pairs[[idx1,idx2],1] = self.pairs[[idx2,idx1],1]
             self.init_positions[[idx1, idx2]] = self.init_positions[[idx2, idx1]]
             self.action = self.action + action_delta
+            return True
+        return False
 
 
 class Lazevo:
-    """
-    Multiple reconstructions of UniverseTrajectory. Initial positions 
-    of each trajectory is random at first, and the whole job of PIZA 
-    is to make it satisfy least action principle.
-    """
-    def __init__(self, universe: Universe, n_realizaitons: int):
-        self.universe = universe
+    """Lagrangian-Zeldovich Void Finder.
 
-        #TODO: Read random positions from file, if provided
-        self.realizations = [
-            UniverseTrajectory(universe.particles, np.asarray(random_init_universe(universe)))
-            for _ in range(n_realizaitons)
+    Multiple reconstructions of Universe. Initial positions 
+    in each Reconstruction are random at first, and the whole job of PIZA 
+    is to make them satisfy least action principle.
+    """
+    def __init__(self, 
+                 particles: Union[np.ndarray, Universe], 
+                 reconstructions: Union[np.ndarray, list[Reconstruction]],
+                 sigma: float):
+        if isinstance(particles, Universe):
+            self.universe = particles
+        else:
+            self.universe = Universe(particles)
+        
+        if isinstance(reconstructions, list) and isinstance(reconstructions[0], Reconstruction):
+            self.reconstructions = reconstructions
+        else:
+            self.reconstructions = [
+                Reconstruction(self.universe.particles, reconstruction)
+                for reconstruction in reconstructions
+            ]
+        
+        self.sigma = sigma
+    
+    @classmethod
+    def from_file(cls, filename, n_reconstructions: int, sigma: float):
+        """Read the universe from the given file path.
+        
+        Args:
+            path: Path to the file
+        
+        Returns:
+            A Universe instance, representing the universe read from the file
+        """
+        with open(filename) as f:
+            #TODO: use numpy method for reading files
+            particles = np.array([[float(q) for q in line.rstrip().split()] for line in f])
+        return cls.from_particles(particles, n_reconstructions, sigma)
+    
+    @classmethod
+    def from_particles(cls, 
+                       particles: np.ndarray, 
+                       n_reconstructions: int, 
+                       sigma: float):
+        particles = np.asarray(particles)
+        # sorted_particles = particles[np.lexsort((particles[:,2], particles[:,1], particles[:,0]))]
+        # universe = Universe(sorted_particles)
+        universe = Universe(particles)
+
+        np_rnd = np.random.default_rng()
+        unordered_init_positions = [
+            np_rnd.uniform(
+                low=universe.min_coords,
+                high=universe.max_coords,
+                size=universe.particles.shape
+            )
+            for _ in range(n_reconstructions)
         ]
+        init_positions = [
+            min(
+                unordered_init_positions[i:len(unordered_init_positions)], 
+                key=lambda p: np.linalg.norm(p - particles[i]) ** 2
+            )
+            for i in range(len(unordered_init_positions))
+        ]
+        # sorted_init_positions = [
+        #     init_pos[np.lexsort((init_pos[:,2], init_pos[:,1], init_pos[:,0]))]
+        #     for init_pos in unsorted_init_positions
+        # ]
 
+        return cls(universe, init_positions, sigma)
 
     def piza(self, n_iters: int = 10):
         """Minimizing action by Path Interchange Zeldovich Approximation (PIZA).
 
-        Runs PIZA for several UniverseTrajectory objects
+        Runs PIZA for several Reconstruction objects
 
         Args:
-            realizations: Each realization is a UniverseTrajectory with a unique initial positions
             n_iters: Number of iterations to perform in the minimization process
         """
 
-        for curr_iter in trange(n_iters): #TODO: Implement more quit strategies
-            for realization in self.realizations:
-                realization.do_piza_step()
+        n_swaps = 0
+        pbar = trange(n_iters, desc="PIZA")
+        for iteration_idx in pbar: #TODO: Implement more quit strategies
+            for reconstruction in self.reconstructions:
+                was_swapped = reconstruction.do_piza_step()
+                if was_swapped:
+                    n_swaps += 1/ len(self.reconstructions)
+            mean_swapping_rate = n_swaps / (iteration_idx + 1) * 100
+            avg_psi = np.average([r.action for r in self.reconstructions])
+            pbar.set_description(
+                f"PIZA (avg ψ = {humanize.scientific(avg_psi)}, "
+                f"swapping rate: {mean_swapping_rate:.2f}%)"
+            )
+
+    
+    def visualization(self, 
+        start: float, end: float, grid_step: float, 
+        axis: int = 0, field_at: Optional[float] = None) -> tuple:
+        """Representation of the universe and algorithm results for plotting.
+
+        Returns particles and, optionally, the displacement field from 
+        a predefined slice of the universe. Returned values are 
+        matplotlib-friendly — plug them into plt.plot and plt.quiver.
+
+        Displacement field is available only after running ``Lazevo.piza`` 
+        method, otherwise it's None.
+
+        Examples:
+            Example 1::
+                >>> particles, _ = lazevo.visualization()
+                >>> plt.plot(*particles) # Plots a slice of the universe
+            
+            Example 2::
+                >>> # After running PIZA algorightm
+                >>> particles, displacements = lazevo.visualization()
+                >>> plt.plot(*particles) # Plots a slice of the universe
+                >>> plt.quiver(*displacements) # Plots the displacement field
+
+        Args:
+            axis (int): (not working) the axis along which to slice.
+                Possible values are 0, 1 and 2, meaning 'x', 'y' and 'z'. 
+                Currently only default value 0 is working correctly.
+            start (float): the start of the slice. 
+                In fractions of size along the axis, so value is in range [0, 1]
+            end (float): the end of the slice.
+                In fractions of size along the axis, so value is in range [0, 1]
+            grid_step (float):
+                Distance between neighbour points in a square grid, which will 
+                be used to calculate displacement. Given in fractions of size 
+                along the axis, so this value is in range [0, 1].
+            field_at (float, optional): 
+                The value of `axis` coordinate, at which displacement field 
+                grid will be calculated. If None, will be the middle of 
+                (start, end). Note, that displacement grid will be None, if
+                PIZA wasn't runned.
+    
+        Returns:
+            A tuple, containing two items: 
+            - particles(np.ndarray): a tuple of xs and ys of the particles
+            - displacements(tuple): a tuple, ready to be plugged into
+              ``matplotlib.pyplot.quiver``. Represents an equally-spaced 2D grid 
+              and displacements vectors, calculated for every point on the grid, 
+              using ``Lazevo.avg_displacement_at``. Has 4 items:
+                - x(np.ndarray): x values of every point in the grid
+                - y(np.ndarray): y values of every point in the grid
+                - u(np.ndarray): x-components of every displacement vector
+                - v(np.ndarray): y-components of every displacement vector
+        """
+        if field_at is None:
+            field_at = (start + end) / 2
+
+        universe_slice = self.universe.slice(axis, start, end)
+        #TODO: explain this $N - axis$ trick
+        slice_particles = universe_slice.particles[:, [1 - axis, 2 - axis]]
+
+        # Early return if there are no displacements
+        if self.reconstructions[0].displacements is None:
+            return slice_particles, None
+
+        # Construct a grid of 3D points. Each point's `axis` axis has 
+        # a value `field_at` and other two axes are constrcted from 
+        # an np.meshgrid from start*size to end*size with 
+        # distance grid_step*size.
+        #
+        # xs and ys are meant in newly constructed 2D plot and have 
+        # nothing to do with `lazevo.universe` coordinate system
+        xs, ys = np.meshgrid(
+            np.arange(0, 1, grid_step) * self.universe.sizes[1 - axis] + self.universe.min_coords[1 - axis],
+            np.arange(0, 1, grid_step) * self.universe.sizes[2 - axis] + self.universe.min_coords[2 - axis]
+        )
+        grid = np.stack((
+            #TODO: `axis` must determine the order of those 3 arrays
+            np.full(xs.shape, field_at * self.universe.sizes[axis] + self.universe.min_coords[axis]),
+            xs,
+            ys
+        ), axis=2).reshape(-1, 3)
+
+        # Calculate displacements at every point in the grid
+        displacements = np.array([
+            self.avg_displacement_at(point)
+            for point in tqdm(grid, desc="Displacement field")
+        ])
+        # displacements = np.stack([
+        #     self.avg_displacement_at(point)
+        #     for point in tqdm(grid, desc="Bulding displacement grid for a given slice...")
+        # ], axis=0)
+
+        particle_xs, particle_ys = slice_particles.T
+        xs, ys = grid[:, [1 - axis, 2 - axis]].T
+        u, v = displacements[:, [1 - axis, 2 - axis]].T
+        return (particle_xs, particle_ys), (xs, ys, u, v)
+
 
     def avg_displacement_at(self, point) -> np.ndarray:
         """
         Averaged displacement at arbitrary point is given by:
-        1 / V(q) * Σ( a(q, p) * p.displacement )
+        1 / V(point) * Σ( a(point, p) * p.displacement )
+        [Σ is over all particles `p` in all reconstructions]
         Where:
-            q - arbitrary point in the Universe
-            p - one of particles (Σ is over all particles in all the realizations)
             V(p) = Σ a(point, p)
-            a(p, q) = e^( - d(p, q)^2 / (2 * sigma^2) )
-            d(p, q) - distacne between points p and q
-            sigma - kernel smoothing parameter
+            a(p, point) = e^( - d(p, point)^2 / (2 * self.sigma^2) )
+            d(p, point) - distacne between points p and point
+        
+        Args:
+            point: numpy 1d array of 3 floats
         """
         point = np.asarray(point)
 
         #TODO: check if point is in universe boundaries
 
-        all_init_positions = np.concatenate([r.init_positions for r in self.realizations], axis=0)
-        all_particles = np.concatenate([r.particles for r in self.realizations], axis=0)
+        all_init_positions = np.concatenate([r.init_positions for r in self.reconstructions], axis=0)
+        all_particles = np.concatenate([r.particles for r in self.reconstructions], axis=0)
         all_displacements = all_particles - all_init_positions
 
-        # 1.5 Mpc/h, assuming 80 Mpc/h = 250 000 in internal units 
-        # (this is the size of the universe, with which testing was done)
-        # Feel free to change
-        sigma = 4687.5
-
-        a = np.exp(-1 * np.linalg.norm(point - all_particles, axis=1) / (2 * sigma ** 2))
+        a = np.exp(-1 * np.linalg.norm(point - all_particles, axis=1) ** 2 / (2 * self.sigma ** 2))
         V = np.sum(a)
-        return a[:, np.newaxis] * all_displacements / V
+        avg_displacement_at_point = np.sum(a[:, np.newaxis] * all_displacements, axis=0) / V
+        return avg_displacement_at_point
 
-    def avg_displacement_on_grid(self, n_steps):
+    def avg_displacements_on_grid(self, n_steps):
         # Create the 3D grid
         min_coords = self.universe.min_coords
         max_coords = self.universe.max_coords
@@ -182,50 +367,14 @@ class Lazevo:
         xx, yy, zz = np.meshgrid(x, y, z, indexing='ij')
         grid = np.vstack([xx.flatten(), yy.flatten(), zz.flatten()]).T
 
-        def probe_and_upd_progressbar(point, bar):
+        def calc_avg_and_upd_progres_bar(point, bar):
             bar.update(1)
             return self.avg_displacement_at(point)
 
         with tqdm(total=len(grid)) as bar:
-            grid_probes = np.apply_along_axis(
-                lambda p: probe_and_upd_progressbar(p, bar), 
+            avgs_on_grid = np.apply_along_axis(
+                lambda p: calc_avg_and_upd_progres_bar(p, bar), 
                 axis=1, arr=grid
             )
 
-        return grid, grid_probes
-
-def read_universe(path: str) -> Universe:
-    """Read the universe from the given file path.
-    
-    Args:
-        path: Path to the file.
-    
-    Returns:
-        A Universe instance, representing the universe read from the file.
-    """
-    with open(path) as f:
-        particle_positions = [[float(q) for q in line.rstrip().split()] for line in f]
-    return Universe(particle_positions)
-
-
-def random_init_universe(universe: Universe) -> np.ndarray:
-    """Generates random initial positions for each particle from the given Universe object.
-
-    Returns:
-        List[Tuple[float, float, float]]: List, containing the same number 
-        of elements, as universe.particles does. Each element is a 3-item 
-        tuple with random coordinates (x, y, z). Generated coordinates are 
-        from range (universe.min_coords, universe.max_coords). So, no random 
-        coordinate is larger or smaller than any given coordinate from Universe.
-
-    """
-    random_positions = [
-        [
-            random.uniform(universe.min_coords[0], universe.max_coords[0]),
-            random.uniform(universe.min_coords[1], universe.max_coords[1]),
-            random.uniform(universe.min_coords[2], universe.max_coords[2])
-        ]
-        for _ in range(len(universe.particles))
-    ]
-
-    return random_positions
+        return grid, avgs_on_grid

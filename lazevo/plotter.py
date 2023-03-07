@@ -39,7 +39,7 @@ def plot_projection_to_file(filename, particles, displacements=None):
     plt.savefig(filename)
 
 
-def plot_universe_trajectory_to_file(filename, universe_trajectory, axis=0, start=0.1, end=0.1625):
+def plot_universe_trajectory_to_file(filename, universe_trajectory, start, end, axis=0):
     """Plots the 2D projection of a slice of a universe trajectory, and saves the plot to a file.
 
     Similar to `plot_universe_to_file` but also draws displacements.
@@ -64,7 +64,7 @@ def plot_universe_trajectory_to_file(filename, universe_trajectory, axis=0, star
     )
 
 
-def plot_universe_to_file(filename, universe, axis=0, start=0.1, end=0.1625):
+def plot_universe_to_file(filename, universe, start, end, axis=0):
     """
     Plots the 2D projection of a slice of a universe, and saves the plot to a file.
 
