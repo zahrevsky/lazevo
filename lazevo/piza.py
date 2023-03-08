@@ -2,6 +2,8 @@
 Provides PIZA algorithm implementation, as well as classes to represent data structures.
 """
 from typing import Optional, Union
+import json
+from datetime import datetime
 
 import numpy as np
 from tqdm import trange, tqdm
@@ -40,9 +42,17 @@ class Universe:
         )
         return Universe(self.particles[mask])
     
+    def pairwise_distances(self):
+        # calculate pairwise distances between each row of X
+        for i in range(self.particles.shape[0]):
+            for j in range(i+1, self.particles.shape[0]):
+                yield np.sqrt(((self.particles[i] - self.particles[j]) ** 2).sum())
+
     @property
     def mean_distance(self):
-        return np.mean(np.sqrt(((self.particles[:, None, :] - self.particles) ** 2).sum(axis=2)))
+        # calculate mean distance between all pairs of particles
+        distances = self.pairwise_distances()
+        return sum(distances) / (len(self.particles) * (len(self.particles) - 1) / 2)
 
 
 class Reconstruction:
@@ -207,6 +217,32 @@ class Lazevo:
         # ]
 
         return cls(universe, init_positions, sigma)
+    
+    @classmethod
+    def load_piza_execution(cls, filename):
+        with open(filename) as inp:
+            piza_exec_data = json.load(inp)
+        
+        return Lazevo(
+            piza_exec_data['universe'],
+            piza_exec_data['reconstructions'],
+            piza_exec_data['sigma']
+        )
+    
+    def dump_piza_execution(self, filename):
+        piza_exec_data = {
+            'universe': self.universe.particles.tolist(),
+            'reconstructions': [r.init_positions.tolist() for r in self.reconstructions],
+            'n_iterations': self.n_iters, # See Lazevo.piza for details
+            'started_at': self.started_at,
+            'ended_at': self.ended_at,
+            'start_actions': self.start_actions,
+            'end_actions': [r.action for r in self.reconstructions],
+            # Technically, sigma is not a part of PIZA. See Lazevo.piza comment
+            'sigma': self.sigma
+        }
+        with open(filename, 'w') as out:
+            json.dump(piza_exec_data, out, default=str)
 
     def piza(self, n_iters: int = 10):
         """Minimizing action by Path Interchange Zeldovich Approximation (PIZA).
@@ -216,6 +252,13 @@ class Lazevo:
         Args:
             n_iters: Number of iterations to perform in the minimization process
         """
+
+        # Needed in Lazevo.dump_piza_execution. It is a strong code smell, 
+        # because, ideally, there should be a separate PizaExecution class, that
+        # is __init__ed with n_iters and stores all those variables.
+        self.n_iters = n_iters
+        self.started_at = datetime.now()
+        self.start_actions = [r.action for r in self.reconstructions]
 
         n_swaps = 0
         pbar = trange(n_iters, desc="PIZA")
@@ -230,6 +273,8 @@ class Lazevo:
                 f"PIZA (avg ψ = {humanize.scientific(avg_psi)}, "
                 f"swapping rate: {mean_swapping_rate:.2f}%)"
             )
+        
+        self.ended_at = datetime.now()
 
     
     def visualization(self, 

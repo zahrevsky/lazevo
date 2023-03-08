@@ -14,19 +14,28 @@ if __name__ == '__main__':
 
     #TODO: Calculate coefficients for mode “t” only
 
-    with open(params['paths']['input']['particles_positions']) as f:
-        #TODO: use numpy method for reading files
-        particles = np.array([[float(q) for q in line.rstrip().split()] for line in f])
+    # with open(params['paths']['input']['particles_positions']) as f:
+    #     #TODO: use numpy method for reading files
+    #     particles = np.array([[float(q) for q in line.rstrip().split()] for line in f])
 
-    with open(params['paths']['input']['reconstructions'][0]) as f:
-        #TODO: use numpy method for reading files
-        reconstruction = np.array([[float(q) for q in line.rstrip().split()] for line in f])
+    # if params['paths']['input']['reconstructions'] is not None:
+    #     with open(params['paths']['input']['reconstructions'][0]) as f:
+    #         #TODO: use numpy method for reading files
+    #         reconstruction = np.array([[float(q) for q in line.rstrip().split()] for line in f])
+    #     lazevo = Lazevo(
+    #         particles, 
+    #         [reconstruction],
+    #         sigma=params['sigma']
+    #     )
+    # else:
+    #     lazevo = Lazevo.from_particles(
+    #         particles, 
+    #         params['n_reconstructions'],
+    #         sigma=params['sigma']
+    #     )
 
-    lazevo = Lazevo(
-        particles, 
-        [reconstruction],
-        sigma=params['sigma']
-    )
+    lazevo = Lazevo.load_piza_execution('output/piza_dump.json')
+    
     x, y, z = lazevo.universe.sizes
     n_particles = len(lazevo.universe.particles)
     mean_squared_displacement = humanize.scientific(lazevo.reconstructions[0].mean_squared_displacement)
@@ -37,7 +46,6 @@ if __name__ == '__main__':
         f"    Y: {y}\n"
         f"    Z: {z}\n"
         f"  Particles: {n_particles}\n"
-        f"  Mean distance: {humanize.scientific(lazevo.universe.mean_distance)}\n"
         f"\n"
         f"Mean squared displacement (reconstruction #1): {mean_squared_displacement}\n"
     )
@@ -87,7 +95,8 @@ if __name__ == '__main__':
         end=params['visualization']['end']
     )
 
-    lazevo.piza(params['n_iters'])
+    # lazevo.piza(params['n_iters'])
+    # lazevo.dump_piza_execution('output/piza_dump.json')
 
     # Plot universe trajectories
     for idx, reconstruction in enumerate(lazevo.reconstructions):
